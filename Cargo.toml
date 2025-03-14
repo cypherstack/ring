@@ -11,9 +11,9 @@
 # will likely look very different (and much more reasonable)
 
 [package]
-name = "ring"
-version = "0.13.5"
-authors = ["Brian Smith <brian@briansmith.org>"]
+name = "cs_ring"
+version = "0.13.6"
+authors = ["Brian Smith <brian@briansmith.org>", "sneurlax"]
 build = "build.rs"
 links = "ring-asm"
 exclude = [".gitignore", "pregenerated/tmp"]
