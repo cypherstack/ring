@@ -17,33 +17,34 @@
 
 #include <stdlib.h>
 
-#include <openssl/cpu.h>
+#include <GFp/cpu.h>
 
-#if defined(__cplusplus)
-extern "C" {
+#if defined(OPENSSL_NO_ASM) || \
+    (!defined(OPENSSL_X86) && !defined(OPENSSL_X86_64) && !defined(OPENSSL_ARM))
+#define GFp_C_AES
+void GFp_aes_c_set_encrypt_key(const uint8_t *key, unsigned bits,
+                               AES_KEY *aeskey);
+void GFp_aes_c_encrypt(const uint8_t *in, uint8_t *out, const AES_KEY *key);
 #endif
 
-
 #if !defined(OPENSSL_NO_ASM)
-
 #if defined(OPENSSL_X86_64)
 #define HWAES
-#define HWAES_ECB
 
-static int hwaes_capable(void) {
-  return (OPENSSL_ia32cap_P[1] & (1 << (57 - 32))) != 0;
+static inline int hwaes_capable(void) {
+  return (GFp_ia32cap_P[1] & (1 << (57 - 32))) != 0;
 }
 #elif defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)
 #define HWAES
 
-static int hwaes_capable(void) {
-  return CRYPTO_is_ARMv8_AES_capable();
+static inline int hwaes_capable(void) {
+  return GFp_is_ARMv8_AES_capable();
 }
 #elif defined(OPENSSL_PPC64LE)
 #define HWAES
 
-static int hwaes_capable(void) {
-  return CRYPTO_is_PPC64LE_vcrypto_capable();
+static inline int hwaes_capable(void) {
+  return GFp_is_PPC64LE_vcrypto_capable();
 }
 #endif
 
@@ -63,53 +64,6 @@ void aes_hw_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t length,
 void aes_hw_ctr32_encrypt_blocks(const uint8_t *in, uint8_t *out, size_t len,
                                  const AES_KEY *key, const uint8_t ivec[16]);
 
-#else
-
-// If HWAES isn't defined then we provide dummy functions for each of the hwaes
-// functions.
-static int hwaes_capable(void) { return 0; }
-
-static int aes_hw_set_encrypt_key(const uint8_t *user_key, int bits,
-                                  AES_KEY *key) {
-  abort();
-}
-
-static int aes_hw_set_decrypt_key(const uint8_t *user_key, int bits,
-                                  AES_KEY *key) {
-  abort();
-}
-
-static void aes_hw_encrypt(const uint8_t *in, uint8_t *out,
-                           const AES_KEY *key) {
-  abort();
-}
-
-static void aes_hw_decrypt(const uint8_t *in, uint8_t *out,
-                           const AES_KEY *key) {
-  abort();
-}
-
-static void aes_hw_cbc_encrypt(const uint8_t *in, uint8_t *out, size_t length,
-                               const AES_KEY *key, uint8_t *ivec, int enc) {
-  abort();
-}
-
-static void aes_hw_ctr32_encrypt_blocks(const uint8_t *in, uint8_t *out,
-                                        size_t len, const AES_KEY *key,
-                                        const uint8_t ivec[16]) {
-  abort();
-}
-
-#endif  // !HWAES
-
-
-#if defined(HWAES_ECB)
-void aes_hw_ecb_encrypt(const uint8_t *in, uint8_t *out, size_t length,
-                        const AES_KEY *key, const int enc);
-#endif
-
-#if defined(__cplusplus)
-}  // extern C
-#endif
+#endif /* HWAES */
 
 #endif  // OPENSSL_HEADER_AES_INTERNAL_H

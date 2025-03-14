@@ -53,7 +53,7 @@ open OUT,"| \"$^X\" $xlate $flavour $output";
 $prefix="aes_hw";
 
 $code=<<___;
-#include <openssl/arm_arch.h>
+#include <GFp/arm_arch.h>
 
 #if __ARM_MAX_ARCH__>=7
 .text
@@ -84,10 +84,10 @@ $code.=<<___;
 .long	0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d	// rotate-n-splat
 .long	0x1b,0x1b,0x1b,0x1b
 
-.globl	${prefix}_set_encrypt_key
-.type	${prefix}_set_encrypt_key,%function
+.globl	GFp_${prefix}_set_encrypt_key
+.type	GFp_${prefix}_set_encrypt_key,%function
 .align	5
-${prefix}_set_encrypt_key:
+GFp_${prefix}_set_encrypt_key:
 .Lenc_key:
 ___
 $code.=<<___	if ($flavour =~ /64/);
@@ -253,61 +253,7 @@ $code.=<<___;
 	mov	x0,$ptr			// return value
 	`"ldr	x29,[sp],#16"		if ($flavour =~ /64/)`
 	ret
-.size	${prefix}_set_encrypt_key,.-${prefix}_set_encrypt_key
-
-.globl	${prefix}_set_decrypt_key
-.type	${prefix}_set_decrypt_key,%function
-.align	5
-${prefix}_set_decrypt_key:
-___
-$code.=<<___	if ($flavour =~ /64/);
-	stp	x29,x30,[sp,#-16]!
-	add	x29,sp,#0
-___
-$code.=<<___	if ($flavour !~ /64/);
-	stmdb	sp!,{r4,lr}
-___
-$code.=<<___;
-	bl	.Lenc_key
-
-	cmp	x0,#0
-	b.ne	.Ldec_key_abort
-
-	sub	$out,$out,#240		// restore original $out
-	mov	x4,#-16
-	add	$inp,$out,x12,lsl#4	// end of key schedule
-
-	vld1.32	{v0.16b},[$out]
-	vld1.32	{v1.16b},[$inp]
-	vst1.32	{v0.16b},[$inp],x4
-	vst1.32	{v1.16b},[$out],#16
-
-.Loop_imc:
-	vld1.32	{v0.16b},[$out]
-	vld1.32	{v1.16b},[$inp]
-	aesimc	v0.16b,v0.16b
-	aesimc	v1.16b,v1.16b
-	vst1.32	{v0.16b},[$inp],x4
-	vst1.32	{v1.16b},[$out],#16
-	cmp	$inp,$out
-	b.hi	.Loop_imc
-
-	vld1.32	{v0.16b},[$out]
-	aesimc	v0.16b,v0.16b
-	vst1.32	{v0.16b},[$inp]
-
-	eor	x0,x0,x0		// return value
-.Ldec_key_abort:
-___
-$code.=<<___	if ($flavour !~ /64/);
-	ldmia	sp!,{r4,pc}
-___
-$code.=<<___	if ($flavour =~ /64/);
-	ldp	x29,x30,[sp],#16
-	ret
-___
-$code.=<<___;
-.size	${prefix}_set_decrypt_key,.-${prefix}_set_decrypt_key
+.size	GFp_${prefix}_set_encrypt_key,.-GFp_${prefix}_set_encrypt_key
 ___
 }}}
 {{{
@@ -319,10 +265,10 @@ my $rounds="w3";
 my ($rndkey0,$rndkey1,$inout)=map("q$_",(0..3));
 
 $code.=<<___;
-.globl	${prefix}_${dir}crypt
-.type	${prefix}_${dir}crypt,%function
+.globl	GFp_${prefix}_${dir}crypt
+.type	GFp_${prefix}_${dir}crypt,%function
 .align	5
-${prefix}_${dir}crypt:
+GFp_${prefix}_${dir}crypt:
 	ldr	$rounds,[$key,#240]
 	vld1.32	{$rndkey0},[$key],#16
 	vld1.8	{$inout},[$inp]
@@ -347,337 +293,11 @@ ${prefix}_${dir}crypt:
 
 	vst1.8	{$inout},[$out]
 	ret
-.size	${prefix}_${dir}crypt,.-${prefix}_${dir}crypt
+.size	GFp_${prefix}_${dir}crypt,.-GFp_${prefix}_${dir}crypt
 ___
 }
 &gen_block("en");
 &gen_block("de");
-}}}
-{{{
-my ($inp,$out,$len,$key,$ivp)=map("x$_",(0..4)); my $enc="w5";
-my ($rounds,$cnt,$key_,$step,$step1)=($enc,"w6","x7","x8","x12");
-my ($dat0,$dat1,$in0,$in1,$tmp0,$tmp1,$ivec,$rndlast)=map("q$_",(0..7));
-
-my ($dat,$tmp,$rndzero_n_last)=($dat0,$tmp0,$tmp1);
-my ($key4,$key5,$key6,$key7)=("x6","x12","x14",$key);
-
-### q8-q15	preloaded key schedule
-
-$code.=<<___;
-.globl	${prefix}_cbc_encrypt
-.type	${prefix}_cbc_encrypt,%function
-.align	5
-${prefix}_cbc_encrypt:
-___
-$code.=<<___	if ($flavour =~ /64/);
-	stp	x29,x30,[sp,#-16]!
-	add	x29,sp,#0
-___
-$code.=<<___	if ($flavour !~ /64/);
-	mov	ip,sp
-	stmdb	sp!,{r4-r8,lr}
-	vstmdb	sp!,{d8-d15}            @ ABI specification says so
-	ldmia	ip,{r4-r5}		@ load remaining args
-___
-$code.=<<___;
-	subs	$len,$len,#16
-	mov	$step,#16
-	b.lo	.Lcbc_abort
-	cclr	$step,eq
-
-	cmp	$enc,#0			// en- or decrypting?
-	ldr	$rounds,[$key,#240]
-	and	$len,$len,#-16
-	vld1.8	{$ivec},[$ivp]
-	vld1.8	{$dat},[$inp],$step
-
-	vld1.32	{q8-q9},[$key]		// load key schedule...
-	sub	$rounds,$rounds,#6
-	add	$key_,$key,x5,lsl#4	// pointer to last 7 round keys
-	sub	$rounds,$rounds,#2
-	vld1.32	{q10-q11},[$key_],#32
-	vld1.32	{q12-q13},[$key_],#32
-	vld1.32	{q14-q15},[$key_],#32
-	vld1.32	{$rndlast},[$key_]
-
-	add	$key_,$key,#32
-	mov	$cnt,$rounds
-	b.eq	.Lcbc_dec
-
-	cmp	$rounds,#2
-	veor	$dat,$dat,$ivec
-	veor	$rndzero_n_last,q8,$rndlast
-	b.eq	.Lcbc_enc128
-
-	vld1.32	{$in0-$in1},[$key_]
-	add	$key_,$key,#16
-	add	$key4,$key,#16*4
-	add	$key5,$key,#16*5
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	add	$key6,$key,#16*6
-	add	$key7,$key,#16*7
-	b	.Lenter_cbc_enc
-
-.align	4
-.Loop_cbc_enc:
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	 vst1.8	{$ivec},[$out],#16
-.Lenter_cbc_enc:
-	aese	$dat,q9
-	aesmc	$dat,$dat
-	aese	$dat,$in0
-	aesmc	$dat,$dat
-	vld1.32	{q8},[$key4]
-	cmp	$rounds,#4
-	aese	$dat,$in1
-	aesmc	$dat,$dat
-	vld1.32	{q9},[$key5]
-	b.eq	.Lcbc_enc192
-
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	vld1.32	{q8},[$key6]
-	aese	$dat,q9
-	aesmc	$dat,$dat
-	vld1.32	{q9},[$key7]
-	nop
-
-.Lcbc_enc192:
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	 subs	$len,$len,#16
-	aese	$dat,q9
-	aesmc	$dat,$dat
-	 cclr	$step,eq
-	aese	$dat,q10
-	aesmc	$dat,$dat
-	aese	$dat,q11
-	aesmc	$dat,$dat
-	 vld1.8	{q8},[$inp],$step
-	aese	$dat,q12
-	aesmc	$dat,$dat
-	 veor	q8,q8,$rndzero_n_last
-	aese	$dat,q13
-	aesmc	$dat,$dat
-	 vld1.32 {q9},[$key_]		// re-pre-load rndkey[1]
-	aese	$dat,q14
-	aesmc	$dat,$dat
-	aese	$dat,q15
-	veor	$ivec,$dat,$rndlast
-	b.hs	.Loop_cbc_enc
-
-	vst1.8	{$ivec},[$out],#16
-	b	.Lcbc_done
-
-.align	5
-.Lcbc_enc128:
-	vld1.32	{$in0-$in1},[$key_]
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	b	.Lenter_cbc_enc128
-.Loop_cbc_enc128:
-	aese	$dat,q8
-	aesmc	$dat,$dat
-	 vst1.8	{$ivec},[$out],#16
-.Lenter_cbc_enc128:
-	aese	$dat,q9
-	aesmc	$dat,$dat
-	 subs	$len,$len,#16
-	aese	$dat,$in0
-	aesmc	$dat,$dat
-	 cclr	$step,eq
-	aese	$dat,$in1
-	aesmc	$dat,$dat
-	aese	$dat,q10
-	aesmc	$dat,$dat
-	aese	$dat,q11
-	aesmc	$dat,$dat
-	 vld1.8	{q8},[$inp],$step
-	aese	$dat,q12
-	aesmc	$dat,$dat
-	aese	$dat,q13
-	aesmc	$dat,$dat
-	aese	$dat,q14
-	aesmc	$dat,$dat
-	 veor	q8,q8,$rndzero_n_last
-	aese	$dat,q15
-	veor	$ivec,$dat,$rndlast
-	b.hs	.Loop_cbc_enc128
-
-	vst1.8	{$ivec},[$out],#16
-	b	.Lcbc_done
-___
-{
-my ($dat2,$in2,$tmp2)=map("q$_",(10,11,9));
-$code.=<<___;
-.align	5
-.Lcbc_dec:
-	vld1.8	{$dat2},[$inp],#16
-	subs	$len,$len,#32		// bias
-	add	$cnt,$rounds,#2
-	vorr	$in1,$dat,$dat
-	vorr	$dat1,$dat,$dat
-	vorr	$in2,$dat2,$dat2
-	b.lo	.Lcbc_dec_tail
-
-	vorr	$dat1,$dat2,$dat2
-	vld1.8	{$dat2},[$inp],#16
-	vorr	$in0,$dat,$dat
-	vorr	$in1,$dat1,$dat1
-	vorr	$in2,$dat2,$dat2
-
-.Loop3x_cbc_dec:
-	aesd	$dat0,q8
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q8
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q8
-	aesimc	$dat2,$dat2
-	vld1.32	{q8},[$key_],#16
-	subs	$cnt,$cnt,#2
-	aesd	$dat0,q9
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q9
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q9
-	aesimc	$dat2,$dat2
-	vld1.32	{q9},[$key_],#16
-	b.gt	.Loop3x_cbc_dec
-
-	aesd	$dat0,q8
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q8
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q8
-	aesimc	$dat2,$dat2
-	 veor	$tmp0,$ivec,$rndlast
-	 subs	$len,$len,#0x30
-	 veor	$tmp1,$in0,$rndlast
-	 mov.lo	x6,$len			// x6, $cnt, is zero at this point
-	aesd	$dat0,q9
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q9
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q9
-	aesimc	$dat2,$dat2
-	 veor	$tmp2,$in1,$rndlast
-	 add	$inp,$inp,x6		// $inp is adjusted in such way that
-					// at exit from the loop $dat1-$dat2
-					// are loaded with last "words"
-	 vorr	$ivec,$in2,$in2
-	 mov	$key_,$key
-	aesd	$dat0,q12
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q12
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q12
-	aesimc	$dat2,$dat2
-	 vld1.8	{$in0},[$inp],#16
-	aesd	$dat0,q13
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q13
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q13
-	aesimc	$dat2,$dat2
-	 vld1.8	{$in1},[$inp],#16
-	aesd	$dat0,q14
-	aesimc	$dat0,$dat0
-	aesd	$dat1,q14
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q14
-	aesimc	$dat2,$dat2
-	 vld1.8	{$in2},[$inp],#16
-	aesd	$dat0,q15
-	aesd	$dat1,q15
-	aesd	$dat2,q15
-	 vld1.32 {q8},[$key_],#16	// re-pre-load rndkey[0]
-	 add	$cnt,$rounds,#2
-	veor	$tmp0,$tmp0,$dat0
-	veor	$tmp1,$tmp1,$dat1
-	veor	$dat2,$dat2,$tmp2
-	 vld1.32 {q9},[$key_],#16	// re-pre-load rndkey[1]
-	vst1.8	{$tmp0},[$out],#16
-	 vorr	$dat0,$in0,$in0
-	vst1.8	{$tmp1},[$out],#16
-	 vorr	$dat1,$in1,$in1
-	vst1.8	{$dat2},[$out],#16
-	 vorr	$dat2,$in2,$in2
-	b.hs	.Loop3x_cbc_dec
-
-	cmn	$len,#0x30
-	b.eq	.Lcbc_done
-	nop
-
-.Lcbc_dec_tail:
-	aesd	$dat1,q8
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q8
-	aesimc	$dat2,$dat2
-	vld1.32	{q8},[$key_],#16
-	subs	$cnt,$cnt,#2
-	aesd	$dat1,q9
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q9
-	aesimc	$dat2,$dat2
-	vld1.32	{q9},[$key_],#16
-	b.gt	.Lcbc_dec_tail
-
-	aesd	$dat1,q8
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q8
-	aesimc	$dat2,$dat2
-	aesd	$dat1,q9
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q9
-	aesimc	$dat2,$dat2
-	aesd	$dat1,q12
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q12
-	aesimc	$dat2,$dat2
-	 cmn	$len,#0x20
-	aesd	$dat1,q13
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q13
-	aesimc	$dat2,$dat2
-	 veor	$tmp1,$ivec,$rndlast
-	aesd	$dat1,q14
-	aesimc	$dat1,$dat1
-	aesd	$dat2,q14
-	aesimc	$dat2,$dat2
-	 veor	$tmp2,$in1,$rndlast
-	aesd	$dat1,q15
-	aesd	$dat2,q15
-	b.eq	.Lcbc_dec_one
-	veor	$tmp1,$tmp1,$dat1
-	veor	$tmp2,$tmp2,$dat2
-	 vorr	$ivec,$in2,$in2
-	vst1.8	{$tmp1},[$out],#16
-	vst1.8	{$tmp2},[$out],#16
-	b	.Lcbc_done
-
-.Lcbc_dec_one:
-	veor	$tmp1,$tmp1,$dat2
-	 vorr	$ivec,$in2,$in2
-	vst1.8	{$tmp1},[$out],#16
-
-.Lcbc_done:
-	vst1.8	{$ivec},[$ivp]
-.Lcbc_abort:
-___
-}
-$code.=<<___	if ($flavour !~ /64/);
-	vldmia	sp!,{d8-d15}
-	ldmia	sp!,{r4-r8,pc}
-___
-$code.=<<___	if ($flavour =~ /64/);
-	ldr	x29,[sp],#16
-	ret
-___
-$code.=<<___;
-.size	${prefix}_cbc_encrypt,.-${prefix}_cbc_encrypt
-___
 }}}
 {{{
 my ($inp,$out,$len,$key,$ivp)=map("x$_",(0..4));
@@ -693,10 +313,10 @@ my ($dat,$tmp)=($dat0,$tmp0);
 ### q8-q15	preloaded key schedule
 
 $code.=<<___;
-.globl	${prefix}_ctr32_encrypt_blocks
-.type	${prefix}_ctr32_encrypt_blocks,%function
+.globl	GFp_${prefix}_ctr32_encrypt_blocks
+.type	GFp_${prefix}_ctr32_encrypt_blocks,%function
 .align	5
-${prefix}_ctr32_encrypt_blocks:
+GFp_${prefix}_ctr32_encrypt_blocks:
 ___
 $code.=<<___	if ($flavour =~ /64/);
 	stp		x29,x30,[sp,#-16]!
@@ -891,7 +511,7 @@ $code.=<<___	if ($flavour =~ /64/);
 	ret
 ___
 $code.=<<___;
-.size	${prefix}_ctr32_encrypt_blocks,.-${prefix}_ctr32_encrypt_blocks
+.size	GFp_${prefix}_ctr32_encrypt_blocks,.-GFp_${prefix}_ctr32_encrypt_blocks
 ___
 }}}
 $code.=<<___;

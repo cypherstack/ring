@@ -12,26 +12,26 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 
-#include <openssl/cpu.h>
+#include <GFp/cpu.h>
 
 #if (defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)) && \
     !defined(OPENSSL_STATIC_ARMCAP)
 
-#include <openssl/arm_arch.h>
+#include <GFp/arm_arch.h>
 
 
-extern uint32_t OPENSSL_armcap_P;
+extern uint32_t GFp_armcap_P;
 
-char CRYPTO_is_NEON_capable_at_runtime(void) {
-  return (OPENSSL_armcap_P & ARMV7_NEON) != 0;
+uint8_t GFp_is_NEON_capable_at_runtime(void) {
+  return (GFp_armcap_P & ARMV7_NEON) != 0;
 }
 
-int CRYPTO_is_ARMv8_AES_capable(void) {
-  return (OPENSSL_armcap_P & ARMV8_AES) != 0;
+int GFp_is_ARMv8_AES_capable(void) {
+  return (GFp_armcap_P & ARMV8_AES) != 0;
 }
 
-int CRYPTO_is_ARMv8_PMULL_capable(void) {
-  return (OPENSSL_armcap_P & ARMV8_PMULL) != 0;
+int GFp_is_ARMv8_PMULL_capable(void) {
+  return (GFp_armcap_P & ARMV8_PMULL) != 0;
 }
 
 #endif  /* (defined(OPENSSL_ARM) || defined(OPENSSL_AARCH64)) &&

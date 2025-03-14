@@ -44,8 +44,9 @@
 # See ghash-x86.pl for background information and details about coding
 # techniques.
 #
-# Special thanks to David Woodhouse for providing access to a
-# Westmere-based system on behalf of Intel Open Source Technology Centre.
+# Special thanks to David Woodhouse <dwmw2@infradead.org> for
+# providing access to a Westmere-based system on behalf of Intel
+# Open Source Technology Centre.
 
 # December 2012
 #
@@ -221,27 +222,19 @@ ___
 
 $code=<<___;
 .text
-.extern	OPENSSL_ia32cap_P
+.extern	GFp_ia32cap_P
 
-.globl	gcm_gmult_4bit
-.type	gcm_gmult_4bit,\@function,2
+.globl	GFp_gcm_gmult_4bit
+.type	GFp_gcm_gmult_4bit,\@function,2
 .align	16
-gcm_gmult_4bit:
-.cfi_startproc
+GFp_gcm_gmult_4bit:
 	push	%rbx
-.cfi_push	%rbx
 	push	%rbp		# %rbp and others are pushed exclusively in
-.cfi_push	%rbp
 	push	%r12		# order to reuse Win64 exception handler...
-.cfi_push	%r12
 	push	%r13
-.cfi_push	%r13
 	push	%r14
-.cfi_push	%r14
 	push	%r15
-.cfi_push	%r15
 	sub	\$280,%rsp
-.cfi_adjust_cfa_offset	280
 .Lgmult_prologue:
 
 	movzb	15($Xi),$Zlo
@@ -253,15 +246,11 @@ $code.=<<___;
 	mov	$Zhi,($Xi)
 
 	lea	280+48(%rsp),%rsi
-.cfi_def_cfa	%rsi,8
 	mov	-8(%rsi),%rbx
-.cfi_restore	%rbx
 	lea	(%rsi),%rsp
-.cfi_def_cfa_register	%rsp
 .Lgmult_epilogue:
 	ret
-.cfi_endproc
-.size	gcm_gmult_4bit,.-gcm_gmult_4bit
+.size	GFp_gcm_gmult_4bit,.-GFp_gcm_gmult_4bit
 ___
 
 # per-function register layout
@@ -270,25 +259,17 @@ $len="%rcx";
 $rem_8bit=$rem_4bit;
 
 $code.=<<___;
-.globl	gcm_ghash_4bit
-.type	gcm_ghash_4bit,\@function,4
+.globl	GFp_gcm_ghash_4bit
+.type	GFp_gcm_ghash_4bit,\@function,4
 .align	16
-gcm_ghash_4bit:
-.cfi_startproc
+GFp_gcm_ghash_4bit:
 	push	%rbx
-.cfi_push	%rbx
 	push	%rbp
-.cfi_push	%rbp
 	push	%r12
-.cfi_push	%r12
 	push	%r13
-.cfi_push	%r13
 	push	%r14
-.cfi_push	%r14
 	push	%r15
-.cfi_push	%r15
 	sub	\$280,%rsp
-.cfi_adjust_cfa_offset	280
 .Lghash_prologue:
 	mov	$inp,%r14		# reassign couple of args
 	mov	$len,%r15
@@ -417,25 +398,16 @@ $code.=<<___;
 	mov	$Zhi,($Xi)
 
 	lea	280+48(%rsp),%rsi
-.cfi_def_cfa	%rsi,8
 	mov	-48(%rsi),%r15
-.cfi_restore	%r15
 	mov	-40(%rsi),%r14
-.cfi_restore	%r14
 	mov	-32(%rsi),%r13
-.cfi_restore	%r13
 	mov	-24(%rsi),%r12
-.cfi_restore	%r12
 	mov	-16(%rsi),%rbp
-.cfi_restore	%rbp
 	mov	-8(%rsi),%rbx
-.cfi_restore	%rbx
 	lea	0(%rsi),%rsp
-.cfi_def_cfa_register	%rsp
 .Lghash_epilogue:
 	ret
-.cfi_endproc
-.size	gcm_ghash_4bit,.-gcm_ghash_4bit
+.size	GFp_gcm_ghash_4bit,.-GFp_gcm_ghash_4bit
 ___
 
 ######################################################################
@@ -514,14 +486,14 @@ ___
   my $HK="%xmm6";
 
 $code.=<<___;
-.globl	gcm_init_clmul
-.type	gcm_init_clmul,\@abi-omnipotent
+.globl	GFp_gcm_init_clmul
+.type	GFp_gcm_init_clmul,\@abi-omnipotent
 .align	16
-gcm_init_clmul:
+GFp_gcm_init_clmul:
 .L_init_clmul:
 ___
 $code.=<<___ if ($win64);
-.LSEH_begin_gcm_init_clmul:
+.LSEH_begin_GFp_gcm_init_clmul:
 	# I can't trust assembler to use specific encoding:-(
 	.byte	0x48,0x83,0xec,0x18		#sub	$0x18,%rsp
 	.byte	0x0f,0x29,0x34,0x24		#movaps	%xmm6,(%rsp)
@@ -583,22 +555,21 @@ ___
 $code.=<<___ if ($win64);
 	movaps	(%rsp),%xmm6
 	lea	0x18(%rsp),%rsp
-.LSEH_end_gcm_init_clmul:
+.LSEH_end_GFp_gcm_init_clmul:
 ___
 $code.=<<___;
 	ret
-.size	gcm_init_clmul,.-gcm_init_clmul
+.size	GFp_gcm_init_clmul,.-GFp_gcm_init_clmul
 ___
 }
 
 { my ($Xip,$Htbl)=@_4args;
 
 $code.=<<___;
-.globl	gcm_gmult_clmul
-.type	gcm_gmult_clmul,\@abi-omnipotent
+.globl	GFp_gcm_gmult_clmul
+.type	GFp_gcm_gmult_clmul,\@abi-omnipotent
 .align	16
-gcm_gmult_clmul:
-.L_gmult_clmul:
+GFp_gcm_gmult_clmul:
 	movdqu		($Xip),$Xi
 	movdqa		.Lbswap_mask(%rip),$T3
 	movdqu		($Htbl),$Hkey
@@ -634,7 +605,7 @@ $code.=<<___;
 	pshufb		$T3,$Xi
 	movdqu		$Xi,($Xip)
 	ret
-.size	gcm_gmult_clmul,.-gcm_gmult_clmul
+.size	GFp_gcm_gmult_clmul,.-GFp_gcm_gmult_clmul
 ___
 }
 
@@ -643,15 +614,15 @@ ___
   my ($T1,$T2,$T3)=map("%xmm$_",(8..10));
 
 $code.=<<___;
-.globl	gcm_ghash_clmul
-.type	gcm_ghash_clmul,\@abi-omnipotent
+.globl	GFp_gcm_ghash_clmul
+.type	GFp_gcm_ghash_clmul,\@abi-omnipotent
 .align	32
-gcm_ghash_clmul:
+GFp_gcm_ghash_clmul:
 .L_ghash_clmul:
 ___
 $code.=<<___ if ($win64);
 	lea	-0x88(%rsp),%rax
-.LSEH_begin_gcm_ghash_clmul:
+.LSEH_begin_GFp_gcm_ghash_clmul:
 	# I can't trust assembler to use specific encoding:-(
 	.byte	0x48,0x8d,0x60,0xe0		#lea	-0x20(%rax),%rsp
 	.byte	0x0f,0x29,0x70,0xe0		#movaps	%xmm6,-0x20(%rax)
@@ -682,8 +653,7 @@ if ($do4xaggr) {
 my ($Xl,$Xm,$Xh,$Hkey3,$Hkey4)=map("%xmm$_",(11..15));
 
 $code.=<<___;
-	leaq		OPENSSL_ia32cap_P(%rip),%rax
-	mov		4(%rax),%eax
+	mov		GFp_ia32cap_P+4(%rip),%eax
 	cmp		\$0x30,$len
 	jb		.Lskip4x
 
@@ -991,26 +961,26 @@ $code.=<<___ if ($win64);
 	movaps	0x80(%rsp),%xmm14
 	movaps	0x90(%rsp),%xmm15
 	lea	0xa8(%rsp),%rsp
-.LSEH_end_gcm_ghash_clmul:
+.LSEH_end_GFp_gcm_ghash_clmul:
 ___
 $code.=<<___;
 	ret
-.size	gcm_ghash_clmul,.-gcm_ghash_clmul
+.size	GFp_gcm_ghash_clmul,.-GFp_gcm_ghash_clmul
 ___
 }
 
 $code.=<<___;
-.globl	gcm_init_avx
-.type	gcm_init_avx,\@abi-omnipotent
+.globl	GFp_gcm_init_avx
+.type	GFp_gcm_init_avx,\@abi-omnipotent
 .align	32
-gcm_init_avx:
+GFp_gcm_init_avx:
 ___
 if ($avx) {
 my ($Htbl,$Xip)=@_4args;
 my $HK="%xmm6";
 
 $code.=<<___ if ($win64);
-.LSEH_begin_gcm_init_avx:
+.LSEH_begin_GFp_gcm_init_avx:
 	# I can't trust assembler to use specific encoding:-(
 	.byte	0x48,0x83,0xec,0x18		#sub	$0x18,%rsp
 	.byte	0x0f,0x29,0x34,0x24		#movaps	%xmm6,(%rsp)
@@ -1128,33 +1098,24 @@ ___
 $code.=<<___ if ($win64);
 	movaps	(%rsp),%xmm6
 	lea	0x18(%rsp),%rsp
-.LSEH_end_gcm_init_avx:
+.LSEH_end_GFp_gcm_init_avx:
 ___
 $code.=<<___;
 	ret
-.size	gcm_init_avx,.-gcm_init_avx
+.size	GFp_gcm_init_avx,.-GFp_gcm_init_avx
 ___
 } else {
 $code.=<<___;
 	jmp	.L_init_clmul
-.size	gcm_init_avx,.-gcm_init_avx
+.size	GFp_gcm_init_avx,.-GFp_gcm_init_avx
 ___
 }
-
-$code.=<<___;
-.globl	gcm_gmult_avx
-.type	gcm_gmult_avx,\@abi-omnipotent
-.align	32
-gcm_gmult_avx:
-	jmp	.L_gmult_clmul
-.size	gcm_gmult_avx,.-gcm_gmult_avx
-___
 
 $code.=<<___;
-.globl	gcm_ghash_avx
-.type	gcm_ghash_avx,\@abi-omnipotent
+.globl	GFp_gcm_ghash_avx
+.type	GFp_gcm_ghash_avx,\@abi-omnipotent
 .align	32
-gcm_ghash_avx:
+GFp_gcm_ghash_avx:
 ___
 if ($avx) {
 my ($Xip,$Htbl,$inp,$len)=@_4args;
@@ -1165,7 +1126,7 @@ my ($Xlo,$Xhi,$Xmi,
 
 $code.=<<___ if ($win64);
 	lea	-0x88(%rsp),%rax
-.LSEH_begin_gcm_ghash_avx:
+.LSEH_begin_GFp_gcm_ghash_avx:
 	# I can't trust assembler to use specific encoding:-(
 	.byte	0x48,0x8d,0x60,0xe0		#lea	-0x20(%rax),%rsp
 	.byte	0x0f,0x29,0x70,0xe0		#movaps	%xmm6,-0x20(%rax)
@@ -1563,16 +1524,16 @@ $code.=<<___ if ($win64);
 	movaps	0x80(%rsp),%xmm14
 	movaps	0x90(%rsp),%xmm15
 	lea	0xa8(%rsp),%rsp
-.LSEH_end_gcm_ghash_avx:
+.LSEH_end_GFp_gcm_ghash_avx:
 ___
 $code.=<<___;
 	ret
-.size	gcm_ghash_avx,.-gcm_ghash_avx
+.size	GFp_gcm_ghash_avx,.-GFp_gcm_ghash_avx
 ___
 } else {
 $code.=<<___;
 	jmp	.L_ghash_clmul
-.size	gcm_ghash_avx,.-gcm_ghash_avx
+.size	GFp_gcm_ghash_avx,.-GFp_gcm_ghash_avx
 ___
 }
 
@@ -1731,47 +1692,47 @@ se_handler:
 
 .section	.pdata
 .align	4
-	.rva	.LSEH_begin_gcm_gmult_4bit
-	.rva	.LSEH_end_gcm_gmult_4bit
-	.rva	.LSEH_info_gcm_gmult_4bit
+	.rva	.LSEH_begin_GFp_gcm_gmult_4bit
+	.rva	.LSEH_end_GFp_gcm_gmult_4bit
+	.rva	.LSEH_info_GFp_gcm_gmult_4bit
 
-	.rva	.LSEH_begin_gcm_ghash_4bit
-	.rva	.LSEH_end_gcm_ghash_4bit
-	.rva	.LSEH_info_gcm_ghash_4bit
+	.rva	.LSEH_begin_GFp_gcm_ghash_4bit
+	.rva	.LSEH_end_GFp_gcm_ghash_4bit
+	.rva	.LSEH_info_GFp_gcm_ghash_4bit
 
-	.rva	.LSEH_begin_gcm_init_clmul
-	.rva	.LSEH_end_gcm_init_clmul
-	.rva	.LSEH_info_gcm_init_clmul
+	.rva	.LSEH_begin_GFp_gcm_init_clmul
+	.rva	.LSEH_end_GFp_gcm_init_clmul
+	.rva	.LSEH_info_GFp_gcm_init_clmul
 
-	.rva	.LSEH_begin_gcm_ghash_clmul
-	.rva	.LSEH_end_gcm_ghash_clmul
-	.rva	.LSEH_info_gcm_ghash_clmul
+	.rva	.LSEH_begin_GFp_gcm_ghash_clmul
+	.rva	.LSEH_end_GFp_gcm_ghash_clmul
+	.rva	.LSEH_info_GFp_gcm_ghash_clmul
 ___
 $code.=<<___	if ($avx);
-	.rva	.LSEH_begin_gcm_init_avx
-	.rva	.LSEH_end_gcm_init_avx
-	.rva	.LSEH_info_gcm_init_clmul
+	.rva	.LSEH_begin_GFp_gcm_init_avx
+	.rva	.LSEH_end_GFp_gcm_init_avx
+	.rva	.LSEH_info_GFp_gcm_init_clmul
 
-	.rva	.LSEH_begin_gcm_ghash_avx
-	.rva	.LSEH_end_gcm_ghash_avx
-	.rva	.LSEH_info_gcm_ghash_clmul
+	.rva	.LSEH_begin_GFp_gcm_ghash_avx
+	.rva	.LSEH_end_GFp_gcm_ghash_avx
+	.rva	.LSEH_info_GFp_gcm_ghash_clmul
 ___
 $code.=<<___;
 .section	.xdata
 .align	8
-.LSEH_info_gcm_gmult_4bit:
+.LSEH_info_GFp_gcm_gmult_4bit:
 	.byte	9,0,0,0
 	.rva	se_handler
 	.rva	.Lgmult_prologue,.Lgmult_epilogue	# HandlerData
-.LSEH_info_gcm_ghash_4bit:
+.LSEH_info_GFp_gcm_ghash_4bit:
 	.byte	9,0,0,0
 	.rva	se_handler
 	.rva	.Lghash_prologue,.Lghash_epilogue	# HandlerData
-.LSEH_info_gcm_init_clmul:
+.LSEH_info_GFp_gcm_init_clmul:
 	.byte	0x01,0x08,0x03,0x00
 	.byte	0x08,0x68,0x00,0x00	#movaps	0x00(rsp),xmm6
 	.byte	0x04,0x22,0x00,0x00	#sub	rsp,0x18
-.LSEH_info_gcm_ghash_clmul:
+.LSEH_info_GFp_gcm_ghash_clmul:
 	.byte	0x01,0x33,0x16,0x00
 	.byte	0x33,0xf8,0x09,0x00	#movaps 0x90(rsp),xmm15
 	.byte	0x2e,0xe8,0x08,0x00	#movaps 0x80(rsp),xmm14

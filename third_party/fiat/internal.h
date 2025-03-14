@@ -23,11 +23,9 @@
 #ifndef OPENSSL_HEADER_CURVE25519_INTERNAL_H
 #define OPENSSL_HEADER_CURVE25519_INTERNAL_H
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
+#include <GFp/base.h>
 
-#include <openssl/base.h>
+#include <GFp/base.h>
 
 #include "../../crypto/internal.h"
 
@@ -36,8 +34,8 @@ extern "C" {
 #define BORINGSSL_X25519_NEON
 
 // x25519_NEON is defined in asm/x25519-arm.S.
-void x25519_NEON(uint8_t out[32], const uint8_t scalar[32],
-                 const uint8_t point[32]);
+void GFp_x25519_NEON(uint8_t out[32], const uint8_t scalar[32],
+                     const uint8_t point[32]);
 #endif
 
 #if defined(BORINGSSL_HAS_UINT128)
@@ -61,6 +59,8 @@ typedef struct fe_loose { uint64_t v[5]; } fe_loose;
 // t[3]+2^102 t[4]+...+2^230 t[9].
 // fe limbs are bounded by 1.125*2^26,1.125*2^25,1.125*2^26,1.125*2^25,etc.
 // Multiplication and carrying produce fe from fe_loose.
+//
+// Keep in sync with `Elem` and `ELEM_LIMBS` in curve25519/ops.rs.
 typedef struct fe { uint32_t v[10]; } fe;
 
 // fe_loose limbs are bounded by 3.375*2^26,3.375*2^25,3.375*2^26,3.375*2^25,etc.
@@ -80,12 +80,15 @@ typedef struct fe_loose { uint32_t v[10]; } fe_loose;
 //   ge_p1p1 (completed): ((X:Z),(Y:T)) satisfying x=X/Z, y=Y/T
 //   ge_precomp (Duif): (y+x,y-x,2dxy)
 
+// Keep in sync with `Point` in curve25519/ops.rs.
 typedef struct {
   fe X;
   fe Y;
   fe Z;
 } ge_p2;
 
+
+// Keep in sync with `ExtPoint` in curve25519/ops.rs.
 typedef struct {
   fe X;
   fe Y;
@@ -113,42 +116,22 @@ typedef struct {
   fe_loose T2d;
 } ge_cached;
 
-void x25519_ge_tobytes(uint8_t s[32], const ge_p2 *h);
-int x25519_ge_frombytes_vartime(ge_p3 *h, const uint8_t *s);
-void x25519_ge_p3_to_cached(ge_cached *r, const ge_p3 *p);
-void x25519_ge_p1p1_to_p2(ge_p2 *r, const ge_p1p1 *p);
-void x25519_ge_p1p1_to_p3(ge_p3 *r, const ge_p1p1 *p);
-void x25519_ge_add(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q);
-void x25519_ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q);
-void x25519_ge_scalarmult_small_precomp(
-    ge_p3 *h, const uint8_t a[32], const uint8_t precomp_table[15 * 2 * 32]);
-void x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t a[32]);
-void x25519_ge_scalarmult(ge_p2 *r, const uint8_t *scalar, const ge_p3 *A);
-void x25519_sc_reduce(uint8_t s[64]);
-
-enum spake2_state_t {
-  spake2_state_init = 0,
-  spake2_state_msg_generated,
-  spake2_state_key_generated,
-};
-
-struct spake2_ctx_st {
-  uint8_t private_key[32];
-  uint8_t my_msg[32];
-  uint8_t password_scalar[32];
-  uint8_t password_hash[64];
-  uint8_t *my_name;
-  size_t my_name_len;
-  uint8_t *their_name;
-  size_t their_name_len;
-  enum spake2_role_t my_role;
-  enum spake2_state_t state;
-  char disable_password_scalar_hack;
-};
-
-
-#if defined(__cplusplus)
-}  // extern C
-#endif
+// Prevent -Wmissing-prototypes warnings.
+void GFp_x25519_fe_invert(fe *out, const fe *z);
+uint8_t GFp_x25519_fe_isnegative(const fe *f);
+void GFp_x25519_fe_mul_ttt(fe *h, const fe *f, const fe *g);
+void GFp_x25519_fe_neg(/*in/out*/ fe *f);
+void GFp_x25519_fe_tobytes(uint8_t *s, const fe *h);
+void GFp_x25519_ge_double_scalarmult_vartime(ge_p2 *r, const uint8_t *a,
+                                             const ge_p3 *A,
+                                             const uint8_t *b);
+int GFp_x25519_ge_frombytes_vartime(ge_p3 *h, const uint8_t *s);
+void GFp_x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t a[32]);
+void GFp_x25519_sc_muladd(uint8_t *s, const uint8_t *a, const uint8_t *b,
+                          const uint8_t *c);
+void GFp_x25519_sc_mask(uint8_t a[32]);
+void GFp_x25519_sc_reduce(uint8_t s[64]);
+void GFp_x25519_scalar_mult(uint8_t out[32], const uint8_t scalar[32],
+                            const uint8_t point[32]);
 
 #endif  // OPENSSL_HEADER_CURVE25519_INTERNAL_H

@@ -1129,10 +1129,6 @@ default	rel
 %define XMMWORD
 %define YMMWORD
 %define ZMMWORD
-
-%ifdef BORINGSSL_PREFIX
-%include "boringssl_prefix_symbols_nasm.inc"
-%endif
 ___
 } elsif ($masm) {
     print <<___;
@@ -1149,9 +1145,6 @@ if ($gas) {
 #endif
 
 #if defined(__x86_64__) && !defined(OPENSSL_NO_ASM)
-#if defined(BORINGSSL_PREFIX)
-#include <boringssl_prefix_symbols_asm.h>
-#endif
 ___
 }
 

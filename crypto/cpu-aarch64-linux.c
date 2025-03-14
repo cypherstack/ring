@@ -12,21 +12,20 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 
-#include <openssl/cpu.h>
+#include <GFp/cpu.h>
 
-#if defined(OPENSSL_AARCH64) && defined(OPENSSL_LINUX) && \
-    !defined(OPENSSL_STATIC_ARMCAP)
+#if defined(OPENSSL_AARCH64) && !defined(OPENSSL_STATIC_ARMCAP)
 
 #include <sys/auxv.h>
 
-#include <openssl/arm_arch.h>
+#include <GFp/arm_arch.h>
 
 #include "internal.h"
 
 
-extern uint32_t OPENSSL_armcap_P;
+extern uint32_t GFp_armcap_P;
 
-void OPENSSL_cpuid_setup(void) {
+void GFp_cpuid_setup(void) {
   unsigned long hwcap = getauxval(AT_HWCAP);
 
   // See /usr/include/asm/hwcap.h on an aarch64 installation for the source of
@@ -43,19 +42,19 @@ void OPENSSL_cpuid_setup(void) {
     return;
   }
 
-  OPENSSL_armcap_P |= ARMV7_NEON;
+  GFp_armcap_P |= ARMV7_NEON;
 
   if (hwcap & kAES) {
-    OPENSSL_armcap_P |= ARMV8_AES;
+    GFp_armcap_P |= ARMV8_AES;
   }
   if (hwcap & kPMULL) {
-    OPENSSL_armcap_P |= ARMV8_PMULL;
+    GFp_armcap_P |= ARMV8_PMULL;
   }
   if (hwcap & kSHA1) {
-    OPENSSL_armcap_P |= ARMV8_SHA1;
+    GFp_armcap_P |= ARMV8_SHA1;
   }
   if (hwcap & kSHA256) {
-    OPENSSL_armcap_P |= ARMV8_SHA256;
+    GFp_armcap_P |= ARMV8_SHA256;
   }
 }
 

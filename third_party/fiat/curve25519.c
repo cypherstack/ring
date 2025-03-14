@@ -27,20 +27,28 @@
 //
 // The field functions are shared by Ed25519 and X25519 where possible.
 
-#include <openssl/curve25519.h>
+#if defined(_MSC_VER)
+#pragma warning(push, 3)
+#endif
 
-#include <assert.h>
 #include <string.h>
 
-#include <openssl/cpu.h>
-#include <openssl/mem.h>
-#include <openssl/rand.h>
-#include <openssl/sha.h>
-#include <openssl/type_check.h>
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
+#include <GFp/cpu.h>
+#include <GFp/mem.h>
 
 #include "internal.h"
 #include "../../crypto/internal.h"
 
+#if defined(_MSC_VER)
+// '=': conversion from 'int64_t' to 'int32_t', possible loss of data
+#pragma warning(disable: 4242)
+// '=': conversion from 'int32_t' to 'uint8_t', possible loss of data
+#pragma warning(disable: 4244)
+#endif
 
 // Various pre-computed constants.
 #include "./curve25519_tables.h"
@@ -265,21 +273,21 @@ static void fe_tobytes(uint8_t s[32], const fe *f) {
 
 // h = 0
 static void fe_0(fe *h) {
-  OPENSSL_memset(h, 0, sizeof(fe));
+  memset(h, 0, sizeof(fe));
 }
 
 static void fe_loose_0(fe_loose *h) {
-  OPENSSL_memset(h, 0, sizeof(fe_loose));
+  memset(h, 0, sizeof(fe_loose));
 }
 
 // h = 1
 static void fe_1(fe *h) {
-  OPENSSL_memset(h, 0, sizeof(fe));
+  memset(h, 0, sizeof(fe));
   h->v[0] = 1;
 }
 
 static void fe_loose_1(fe_loose *h) {
-  OPENSSL_memset(h, 0, sizeof(fe_loose));
+  memset(h, 0, sizeof(fe_loose));
   h->v[0] = 1;
 }
 
@@ -438,9 +446,11 @@ static void fe_mul_ltt(fe_loose *h, const fe *f, const fe *g) {
   fe_mul_impl(h->v, f->v, g->v);
 }
 
+#if defined(OPENSSL_SMALL)
 static void fe_mul_llt(fe_loose *h, const fe_loose *f, const fe *g) {
   fe_mul_impl(h->v, f->v, g->v);
 }
+#endif
 
 static void fe_mul_ttt(fe *h, const fe *f, const fe *g) {
   fe_mul_impl(h->v, f->v, g->v);
@@ -769,21 +779,21 @@ static void fe_tobytes(uint8_t s[32], const fe *f) {
 
 // h = 0
 static void fe_0(fe *h) {
-  OPENSSL_memset(h, 0, sizeof(fe));
+  memset(h, 0, sizeof(fe));
 }
 
 static void fe_loose_0(fe_loose *h) {
-  OPENSSL_memset(h, 0, sizeof(fe_loose));
+  memset(h, 0, sizeof(fe_loose));
 }
 
 // h = 1
 static void fe_1(fe *h) {
-  OPENSSL_memset(h, 0, sizeof(fe));
+  memset(h, 0, sizeof(fe));
   h->v[0] = 1;
 }
 
 static void fe_loose_1(fe_loose *h) {
-  OPENSSL_memset(h, 0, sizeof(fe_loose));
+  memset(h, 0, sizeof(fe_loose));
   h->v[0] = 1;
 }
 
@@ -1060,9 +1070,9 @@ static void fe_mul_ltt(fe_loose *h, const fe *f, const fe *g) {
   fe_mul_impl(h->v, f->v, g->v);
 }
 
-static void fe_mul_llt(fe_loose *h, const fe_loose *f, const fe *g) {
-  fe_mul_impl(h->v, f->v, g->v);
-}
+// static void fe_mul_llt(fe_loose *h, const fe_loose *f, const fe *g) was
+// removed. This comment is here to make diffs vs. BoringSSL easier to read.
+
 
 static void fe_mul_ttt(fe *h, const fe *f, const fe *g) {
   fe_mul_impl(h->v, f->v, g->v);
@@ -1392,17 +1402,17 @@ static void fe_cmov(fe_loose *f, const fe_loose *g, unsigned b) {
 
 // h = f
 static void fe_copy(fe *h, const fe *f) {
-  OPENSSL_memmove(h, f, sizeof(fe));
+  memmove(h, f, sizeof(fe));
 }
 
 static void fe_copy_lt(fe_loose *h, const fe *f) {
   OPENSSL_COMPILE_ASSERT(sizeof(fe_loose) == sizeof(fe),
                          fe_and_fe_loose_mismatch);
-  OPENSSL_memmove(h, f, sizeof(fe));
+  memmove(h, f, sizeof(fe));
 }
 #if !defined(OPENSSL_SMALL)
 static void fe_copy_ll(fe_loose *h, const fe_loose *f) {
-  OPENSSL_memmove(h, f, sizeof(fe_loose));
+  memmove(h, f, sizeof(fe_loose));
 }
 #endif // !defined(OPENSSL_SMALL)
 
@@ -1479,7 +1489,7 @@ static int fe_isnonzero(const fe_loose *f) {
   fe_tobytes(s, &tight);
 
   static const uint8_t zero[32] = {0};
-  return CRYPTO_memcmp(s, zero, sizeof(zero)) != 0;
+  return GFp_memcmp(s, zero, sizeof(zero)) != 0;
 }
 
 // return 1 if f is in {1,3,5,...,q-2}
@@ -1560,31 +1570,7 @@ static void fe_pow22523(fe *out, const fe *z) {
 
 // Group operations.
 
-void x25519_ge_tobytes(uint8_t s[32], const ge_p2 *h) {
-  fe recip;
-  fe x;
-  fe y;
-
-  fe_invert(&recip, &h->Z);
-  fe_mul_ttt(&x, &h->X, &recip);
-  fe_mul_ttt(&y, &h->Y, &recip);
-  fe_tobytes(s, &y);
-  s[31] ^= fe_isnegative(&x) << 7;
-}
-
-static void ge_p3_tobytes(uint8_t s[32], const ge_p3 *h) {
-  fe recip;
-  fe x;
-  fe y;
-
-  fe_invert(&recip, &h->Z);
-  fe_mul_ttt(&x, &h->X, &recip);
-  fe_mul_ttt(&y, &h->Y, &recip);
-  fe_tobytes(s, &y);
-  s[31] ^= fe_isnegative(&x) << 7;
-}
-
-int x25519_ge_frombytes_vartime(ge_p3 *h, const uint8_t *s) {
+int GFp_x25519_ge_frombytes_vartime(ge_p3 *h, const uint8_t *s) {
   fe u;
   fe_loose v;
   fe v3;
@@ -1643,13 +1629,6 @@ static void ge_p3_0(ge_p3 *h) {
   fe_0(&h->T);
 }
 
-static void ge_cached_0(ge_cached *h) {
-  fe_loose_1(&h->YplusX);
-  fe_loose_1(&h->YminusX);
-  fe_loose_1(&h->Z);
-  fe_loose_0(&h->T2d);
-}
-
 static void ge_precomp_0(ge_precomp *h) {
   fe_loose_1(&h->yplusx);
   fe_loose_1(&h->yminusx);
@@ -1664,7 +1643,7 @@ static void ge_p3_to_p2(ge_p2 *r, const ge_p3 *p) {
 }
 
 // r = p
-void x25519_ge_p3_to_cached(ge_cached *r, const ge_p3 *p) {
+static void x25519_ge_p3_to_cached(ge_cached *r, const ge_p3 *p) {
   fe_add(&r->YplusX, &p->Y, &p->X);
   fe_sub(&r->YminusX, &p->Y, &p->X);
   fe_copy_lt(&r->Z, &p->Z);
@@ -1672,25 +1651,18 @@ void x25519_ge_p3_to_cached(ge_cached *r, const ge_p3 *p) {
 }
 
 // r = p
-void x25519_ge_p1p1_to_p2(ge_p2 *r, const ge_p1p1 *p) {
+static void x25519_ge_p1p1_to_p2(ge_p2 *r, const ge_p1p1 *p) {
   fe_mul_tll(&r->X, &p->X, &p->T);
   fe_mul_tll(&r->Y, &p->Y, &p->Z);
   fe_mul_tll(&r->Z, &p->Z, &p->T);
 }
 
 // r = p
-void x25519_ge_p1p1_to_p3(ge_p3 *r, const ge_p1p1 *p) {
+static void x25519_ge_p1p1_to_p3(ge_p3 *r, const ge_p1p1 *p) {
   fe_mul_tll(&r->X, &p->X, &p->T);
   fe_mul_tll(&r->Y, &p->Y, &p->Z);
   fe_mul_tll(&r->Z, &p->Z, &p->T);
   fe_mul_tll(&r->T, &p->X, &p->Y);
-}
-
-// r = p
-static void ge_p1p1_to_cached(ge_cached *r, const ge_p1p1 *p) {
-  ge_p3 t;
-  x25519_ge_p1p1_to_p3(&t, p);
-  x25519_ge_p3_to_cached(r, &t);
 }
 
 // r = 2 * p
@@ -1754,7 +1726,7 @@ static void ge_msub(ge_p1p1 *r, const ge_p3 *p, const ge_precomp *q) {
 }
 
 // r = p + q
-void x25519_ge_add(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
+static void x25519_ge_add(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
   fe trX, trY, trZ, trT;
 
   fe_add(&r->X, &p->Y, &p->X);
@@ -1772,7 +1744,7 @@ void x25519_ge_add(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
 }
 
 // r = p - q
-void x25519_ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
+static void x25519_ge_sub(ge_p1p1 *r, const ge_p3 *p, const ge_cached *q) {
   fe trX, trY, trZ, trT;
 
   fe_add(&r->X, &p->Y, &p->X);
@@ -1805,7 +1777,9 @@ static void cmov(ge_precomp *t, const ge_precomp *u, uint8_t b) {
   fe_cmov(&t->xy2d, &u->xy2d, b);
 }
 
-void x25519_ge_scalarmult_small_precomp(
+#if defined(OPENSSL_SMALL)
+
+static void x25519_ge_scalarmult_small_precomp(
     ge_p3 *h, const uint8_t a[32], const uint8_t precomp_table[15 * 2 * 32]) {
   // precomp_table is first expanded into matching |ge_precomp|
   // elements.
@@ -1857,8 +1831,6 @@ void x25519_ge_scalarmult_small_precomp(
   }
 }
 
-#if defined(OPENSSL_SMALL)
-
 void x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t a[32]) {
   x25519_ge_scalarmult_small_precomp(h, a, k25519SmallPrecomp);
 }
@@ -1902,7 +1874,7 @@ static void table_select(ge_precomp *t, int pos, signed char b) {
 //
 // Preconditions:
 //   a[31] <= 127
-void x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t *a) {
+void GFp_x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t *a) {
   signed char e[64];
   signed char carry;
   ge_p1p1 r;
@@ -1951,67 +1923,6 @@ void x25519_ge_scalarmult_base(ge_p3 *h, const uint8_t *a) {
 }
 
 #endif
-
-static void cmov_cached(ge_cached *t, ge_cached *u, uint8_t b) {
-  fe_cmov(&t->YplusX, &u->YplusX, b);
-  fe_cmov(&t->YminusX, &u->YminusX, b);
-  fe_cmov(&t->Z, &u->Z, b);
-  fe_cmov(&t->T2d, &u->T2d, b);
-}
-
-// r = scalar * A.
-// where a = a[0]+256*a[1]+...+256^31 a[31].
-void x25519_ge_scalarmult(ge_p2 *r, const uint8_t *scalar, const ge_p3 *A) {
-  ge_p2 Ai_p2[8];
-  ge_cached Ai[16];
-  ge_p1p1 t;
-
-  ge_cached_0(&Ai[0]);
-  x25519_ge_p3_to_cached(&Ai[1], A);
-  ge_p3_to_p2(&Ai_p2[1], A);
-
-  unsigned i;
-  for (i = 2; i < 16; i += 2) {
-    ge_p2_dbl(&t, &Ai_p2[i / 2]);
-    ge_p1p1_to_cached(&Ai[i], &t);
-    if (i < 8) {
-      x25519_ge_p1p1_to_p2(&Ai_p2[i], &t);
-    }
-    x25519_ge_add(&t, A, &Ai[i]);
-    ge_p1p1_to_cached(&Ai[i + 1], &t);
-    if (i < 7) {
-      x25519_ge_p1p1_to_p2(&Ai_p2[i + 1], &t);
-    }
-  }
-
-  ge_p2_0(r);
-  ge_p3 u;
-
-  for (i = 0; i < 256; i += 4) {
-    ge_p2_dbl(&t, r);
-    x25519_ge_p1p1_to_p2(r, &t);
-    ge_p2_dbl(&t, r);
-    x25519_ge_p1p1_to_p2(r, &t);
-    ge_p2_dbl(&t, r);
-    x25519_ge_p1p1_to_p2(r, &t);
-    ge_p2_dbl(&t, r);
-    x25519_ge_p1p1_to_p3(&u, &t);
-
-    uint8_t index = scalar[31 - i/8];
-    index >>= 4 - (i & 4);
-    index &= 0xf;
-
-    unsigned j;
-    ge_cached selected;
-    ge_cached_0(&selected);
-    for (j = 0; j < 16; j++) {
-      cmov_cached(&selected, &Ai[j], equal(j, index));
-    }
-
-    x25519_ge_add(&t, &u, &selected);
-    x25519_ge_p1p1_to_p2(r, &t);
-  }
-}
 
 static void slide(signed char *r, const uint8_t *a) {
   int i;
@@ -2130,7 +2041,7 @@ static void ge_double_scalarmult_vartime(ge_p2 *r, const uint8_t *a,
 //   s[0]+256*s[1]+...+256^31*s[31] = s mod l
 //   where l = 2^252 + 27742317777372353535851937790883648493.
 //   Overwrites s in place.
-void x25519_sc_reduce(uint8_t s[64]) {
+void GFp_x25519_sc_reduce(uint8_t s[64]) {
   int64_t s0 = 2097151 & load_3(s);
   int64_t s1 = 2097151 & (load_4(s + 2) >> 5);
   int64_t s2 = 2097151 & (load_3(s + 5) >> 2);
@@ -2952,132 +2863,6 @@ static void sc_muladd(uint8_t *s, const uint8_t *a, const uint8_t *b,
   s[31] = s11 >> 17;
 }
 
-void ED25519_keypair(uint8_t out_public_key[32], uint8_t out_private_key[64]) {
-  uint8_t seed[32];
-  RAND_bytes(seed, 32);
-  ED25519_keypair_from_seed(out_public_key, out_private_key, seed);
-}
-
-int ED25519_sign(uint8_t out_sig[64], const uint8_t *message,
-                 size_t message_len, const uint8_t private_key[64]) {
-  // NOTE: The documentation on this function says that it returns zero on
-  // allocation failure. While that can't happen with the current
-  // implementation, we want to reserve the ability to allocate in this
-  // implementation in the future.
-
-  uint8_t az[SHA512_DIGEST_LENGTH];
-  SHA512(private_key, 32, az);
-
-  az[0] &= 248;
-  az[31] &= 63;
-  az[31] |= 64;
-
-  SHA512_CTX hash_ctx;
-  SHA512_Init(&hash_ctx);
-  SHA512_Update(&hash_ctx, az + 32, 32);
-  SHA512_Update(&hash_ctx, message, message_len);
-  uint8_t nonce[SHA512_DIGEST_LENGTH];
-  SHA512_Final(nonce, &hash_ctx);
-
-  x25519_sc_reduce(nonce);
-  ge_p3 R;
-  x25519_ge_scalarmult_base(&R, nonce);
-  ge_p3_tobytes(out_sig, &R);
-
-  SHA512_Init(&hash_ctx);
-  SHA512_Update(&hash_ctx, out_sig, 32);
-  SHA512_Update(&hash_ctx, private_key + 32, 32);
-  SHA512_Update(&hash_ctx, message, message_len);
-  uint8_t hram[SHA512_DIGEST_LENGTH];
-  SHA512_Final(hram, &hash_ctx);
-
-  x25519_sc_reduce(hram);
-  sc_muladd(out_sig + 32, hram, az, nonce);
-
-  return 1;
-}
-
-int ED25519_verify(const uint8_t *message, size_t message_len,
-                   const uint8_t signature[64], const uint8_t public_key[32]) {
-  ge_p3 A;
-  if ((signature[63] & 224) != 0 ||
-      !x25519_ge_frombytes_vartime(&A, public_key)) {
-    return 0;
-  }
-
-  fe_loose t;
-  fe_neg(&t, &A.X);
-  fe_carry(&A.X, &t);
-  fe_neg(&t, &A.T);
-  fe_carry(&A.T, &t);
-
-  uint8_t pkcopy[32];
-  OPENSSL_memcpy(pkcopy, public_key, 32);
-  uint8_t rcopy[32];
-  OPENSSL_memcpy(rcopy, signature, 32);
-  union {
-    uint64_t u64[4];
-    uint8_t u8[32];
-  } scopy;
-  OPENSSL_memcpy(&scopy.u8[0], signature + 32, 32);
-
-  // https://tools.ietf.org/html/rfc8032#section-5.1.7 requires that s be in
-  // the range [0, order) in order to prevent signature malleability.
-
-  // kOrder is the order of Curve25519 in little-endian form.
-  static const uint64_t kOrder[4] = {
-    UINT64_C(0x5812631a5cf5d3ed),
-    UINT64_C(0x14def9dea2f79cd6),
-    0,
-    UINT64_C(0x1000000000000000),
-  };
-  for (size_t i = 3;; i--) {
-    if (scopy.u64[i] > kOrder[i]) {
-      return 0;
-    } else if (scopy.u64[i] < kOrder[i]) {
-      break;
-    } else if (i == 0) {
-      return 0;
-    }
-  }
-
-  SHA512_CTX hash_ctx;
-  SHA512_Init(&hash_ctx);
-  SHA512_Update(&hash_ctx, signature, 32);
-  SHA512_Update(&hash_ctx, public_key, 32);
-  SHA512_Update(&hash_ctx, message, message_len);
-  uint8_t h[SHA512_DIGEST_LENGTH];
-  SHA512_Final(h, &hash_ctx);
-
-  x25519_sc_reduce(h);
-
-  ge_p2 R;
-  ge_double_scalarmult_vartime(&R, h, &A, scopy.u8);
-
-  uint8_t rcheck[32];
-  x25519_ge_tobytes(rcheck, &R);
-
-  return CRYPTO_memcmp(rcheck, rcopy, sizeof(rcheck)) == 0;
-}
-
-void ED25519_keypair_from_seed(uint8_t out_public_key[32],
-                               uint8_t out_private_key[64],
-                               const uint8_t seed[32]) {
-  uint8_t az[SHA512_DIGEST_LENGTH];
-  SHA512(seed, 32, az);
-
-  az[0] &= 248;
-  az[31] &= 127;
-  az[31] |= 64;
-
-  ge_p3 A;
-  x25519_ge_scalarmult_base(&A, az);
-  ge_p3_tobytes(out_public_key, &A);
-
-  OPENSSL_memcpy(out_private_key, seed, 32);
-  OPENSSL_memcpy(out_private_key + 32, out_public_key, 32);
-}
-
 
 static void x25519_scalar_mult_generic(uint8_t out[32],
                                        const uint8_t scalar[32],
@@ -3086,11 +2871,8 @@ static void x25519_scalar_mult_generic(uint8_t out[32],
   fe_loose x2l, z2l, x3l, tmp0l, tmp1l;
 
   uint8_t e[32];
-  OPENSSL_memcpy(e, scalar, 32);
-  e[0] &= 248;
-  e[31] &= 127;
-  e[31] |= 64;
-
+  memcpy(e, scalar, 32);
+  GFp_x25519_sc_mask(e);
   // The following implementation was transcribed to Coq and proven to
   // correspond to unary scalar multiplication in affine coordinates given that
   // x1 != 0 is the x coordinate of some point on the curve. It was also checked
@@ -3164,8 +2946,8 @@ static void x25519_scalar_mult_generic(uint8_t out[32],
 static void x25519_scalar_mult(uint8_t out[32], const uint8_t scalar[32],
                                const uint8_t point[32]) {
 #if defined(BORINGSSL_X25519_NEON)
-  if (CRYPTO_is_NEON_capable()) {
-    x25519_NEON(out, scalar, point);
+  if (GFp_is_NEON_capable()) {
+    GFp_x25519_NEON(out, scalar, point);
     return;
   }
 #endif
@@ -3173,55 +2955,31 @@ static void x25519_scalar_mult(uint8_t out[32], const uint8_t scalar[32],
   x25519_scalar_mult_generic(out, scalar, point);
 }
 
-void X25519_keypair(uint8_t out_public_value[32], uint8_t out_private_key[32]) {
-  RAND_bytes(out_private_key, 32);
-
-  // All X25519 implementations should decode scalars correctly (see
-  // https://tools.ietf.org/html/rfc7748#section-5). However, if an
-  // implementation doesn't then it might interoperate with random keys a
-  // fraction of the time because they'll, randomly, happen to be correctly
-  // formed.
-  //
-  // Thus we do the opposite of the masking here to make sure that our private
-  // keys are never correctly masked and so, hopefully, any incorrect
-  // implementations are deterministically broken.
-  //
-  // This does not affect security because, although we're throwing away
-  // entropy, a valid implementation of scalarmult should throw away the exact
-  // same bits anyway.
-  out_private_key[0] |= ~248;
-  out_private_key[31] &= ~64;
-  out_private_key[31] |= ~127;
-
-  X25519_public_from_private(out_public_value, out_private_key);
+void GFp_x25519_scalar_mult(uint8_t out[32], const uint8_t scalar[32],
+                            const uint8_t point[32]) {
+  x25519_scalar_mult(out, scalar, point);
 }
 
-int X25519(uint8_t out_shared_key[32], const uint8_t private_key[32],
-           const uint8_t peer_public_value[32]) {
-  static const uint8_t kZeros[32] = {0};
-  x25519_scalar_mult(out_shared_key, private_key, peer_public_value);
-  // The all-zero output results when the input is a point of small order.
-  return CRYPTO_memcmp(kZeros, out_shared_key, 32) != 0;
-}
+// Prototypes to avoid -Wmissing-prototypes warnings.
+void GFp_x25519_public_from_private(uint8_t out_public_value[32],
+                                    const uint8_t private_key[32]);
 
-void X25519_public_from_private(uint8_t out_public_value[32],
-                                const uint8_t private_key[32]) {
+void GFp_x25519_public_from_private(uint8_t out_public_value[32],
+                                    const uint8_t private_key[32]) {
 #if defined(BORINGSSL_X25519_NEON)
-  if (CRYPTO_is_NEON_capable()) {
+  if (GFp_is_NEON_capable()) {
     static const uint8_t kMongomeryBasePoint[32] = {9};
-    x25519_NEON(out_public_value, private_key, kMongomeryBasePoint);
+    GFp_x25519_NEON(out_public_value, private_key, kMongomeryBasePoint);
     return;
   }
 #endif
 
   uint8_t e[32];
-  OPENSSL_memcpy(e, private_key, 32);
-  e[0] &= 248;
-  e[31] &= 127;
-  e[31] |= 64;
+  memcpy(e, private_key, 32);
+  GFp_x25519_sc_mask(e);
 
   ge_p3 A;
-  x25519_ge_scalarmult_base(&A, e);
+  GFp_x25519_ge_scalarmult_base(&A, e);
 
   // We only need the u-coordinate of the curve25519 point. The map is
   // u=(y+1)/(1-y). Since y=Y/Z, this gives u=(Z+Y)/(Z-Y).
@@ -3232,4 +2990,42 @@ void X25519_public_from_private(uint8_t out_public_value[32],
   fe_loose_invert(&zminusy_inv, &zminusy);
   fe_mul_tlt(&zminusy_inv, &zplusy, &zminusy_inv);
   fe_tobytes(out_public_value, &zminusy_inv);
+}
+
+void GFp_x25519_fe_invert(fe *out, const fe *z) {
+  fe_invert(out, z);
+}
+
+uint8_t GFp_x25519_fe_isnegative(const fe *f) {
+  return (uint8_t)fe_isnegative(f);
+}
+
+void GFp_x25519_fe_mul_ttt(fe *h, const fe *f, const fe *g) {
+  fe_mul_ttt(h, f, g);
+}
+
+void GFp_x25519_fe_neg(fe *f) {
+  fe_loose t;
+  fe_neg(&t, f);
+  fe_carry(f, &t);
+}
+
+void GFp_x25519_fe_tobytes(uint8_t s[32], const fe *h) {
+  fe_tobytes(s, h);
+}
+
+void GFp_x25519_ge_double_scalarmult_vartime(ge_p2 *r, const uint8_t *a,
+                                             const ge_p3 *A, const uint8_t *b) {
+  ge_double_scalarmult_vartime(r, a, A, b);
+}
+
+void GFp_x25519_sc_mask(uint8_t a[32]) {
+  a[0] &= 248;
+  a[31] &= 127;
+  a[31] |= 64;
+}
+
+void GFp_x25519_sc_muladd(uint8_t *s, const uint8_t *a, const uint8_t *b,
+                          const uint8_t *c) {
+  sc_muladd(s, a, b, c);
 }

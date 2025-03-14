@@ -53,7 +53,7 @@ if ($flavour && $flavour ne "void") {
     open STDOUT,">$output";
 }
 
-if ($output =~ /512/) {
+if ($output =~ /sha512-armv8/) {
 	$BITS=512;
 	$SZ=8;
 	@Sigma0=(28,34,39);
@@ -73,7 +73,7 @@ if ($output =~ /512/) {
 	$reg_t="w";
 }
 
-$func="sha${BITS}_block_data_order";
+$func="GFp_sha${BITS}_block_data_order";
 
 ($ctx,$inp,$num,$Ktbl)=map("x$_",(0..2,30));
 
@@ -172,12 +172,12 @@ ___
 
 $code.=<<___;
 #ifndef	__KERNEL__
-# include <openssl/arm_arch.h>
+# include <GFp/arm_arch.h>
 #endif
 
 .text
 
-.extern	OPENSSL_armcap_P
+.extern	GFp_armcap_P
 .globl	$func
 .type	$func,%function
 .align	6
@@ -186,11 +186,11 @@ ___
 $code.=<<___	if ($SZ==4);
 #ifndef	__KERNEL__
 # ifdef	__ILP32__
-	ldrsw	x16,.LOPENSSL_armcap_P
+	ldrsw	x16,.LGFp_armcap_P
 # else
-	ldr	x16,.LOPENSSL_armcap_P
+	ldr	x16,.LGFp_armcap_P
 # endif
-	adr	x17,.LOPENSSL_armcap_P
+	adr	x17,.LGFp_armcap_P
 	add	x16,x16,x17
 	ldr	w16,[x16]
 	tst	w16,#ARMV8_SHA256
@@ -332,11 +332,11 @@ $code.=<<___;
 .size	.LK$BITS,.-.LK$BITS
 #ifndef	__KERNEL__
 .align	3
-.LOPENSSL_armcap_P:
+.LGFp_armcap_P:
 # ifdef	__ILP32__
-	.long	OPENSSL_armcap_P-.
+	.long	GFp_armcap_P-.
 # else
-	.quad	OPENSSL_armcap_P-.
+	.quad	GFp_armcap_P-.
 # endif
 #endif
 .asciz	"SHA$BITS block transform for ARMv8, CRYPTOGAMS by <appro\@openssl.org>"
@@ -427,8 +427,7 @@ ___
 
 $code.=<<___;
 #ifndef	__KERNEL__
-.comm	OPENSSL_armcap_P,4,4
-.hidden	OPENSSL_armcap_P
+.comm	GFp_armcap_P,4,4
 #endif
 ___
 

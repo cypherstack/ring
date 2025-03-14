@@ -309,7 +309,7 @@ _aesni_ctr32_ghash_6x:
 	  vmovups	0xb0-0x80($key),$rndkey
 	  vaesenc	$T1,$inout5,$inout5
 	  vmovups	0xc0-0x80($key),$T1
-	  je		.Lenc_tail		# 192-bit key
+	  # 192-bit key support was removed.
 
 	  vaesenc	$rndkey,$inout0,$inout0
 	  vaesenc	$rndkey,$inout1,$inout1
@@ -416,14 +416,14 @@ _aesni_ctr32_ghash_6x:
 ___
 ######################################################################
 #
-# size_t aesni_gcm_[en|de]crypt(const void *inp, void *out, size_t len,
+# size_t GFp_aesni_gcm_[en|de]crypt(const void *inp, void *out, size_t len,
 #		const AES_KEY *key, unsigned char iv[16],
 #		struct { u128 Xi,H,Htbl[9]; } *Xip);
 $code.=<<___;
-.globl	aesni_gcm_decrypt
-.type	aesni_gcm_decrypt,\@function,6
+.globl	GFp_aesni_gcm_decrypt
+.type	GFp_aesni_gcm_decrypt,\@function,6
 .align	32
-aesni_gcm_decrypt:
+GFp_aesni_gcm_decrypt:
 .cfi_startproc
 	xor	$ret,$ret
 
@@ -562,7 +562,7 @@ $code.=<<___;
 	mov	$ret,%rax		# return value
 	ret
 .cfi_endproc
-.size	aesni_gcm_decrypt,.-aesni_gcm_decrypt
+.size	GFp_aesni_gcm_decrypt,.-GFp_aesni_gcm_decrypt
 ___
 
 $code.=<<___;
@@ -659,10 +659,10 @@ _aesni_ctr32_6x:
 .cfi_endproc
 .size	_aesni_ctr32_6x,.-_aesni_ctr32_6x
 
-.globl	aesni_gcm_encrypt
-.type	aesni_gcm_encrypt,\@function,6
+.globl	GFp_aesni_gcm_encrypt
+.type	GFp_aesni_gcm_encrypt,\@function,6
 .align	32
-aesni_gcm_encrypt:
+GFp_aesni_gcm_encrypt:
 .cfi_startproc
 	xor	$ret,$ret
 
@@ -974,7 +974,7 @@ $code.=<<___;
 	mov	$ret,%rax		# return value
 	ret
 .cfi_endproc
-.size	aesni_gcm_encrypt,.-aesni_gcm_encrypt
+.size	GFp_aesni_gcm_encrypt,.-GFp_aesni_gcm_encrypt
 ___
 
 $code.=<<___;
@@ -1094,20 +1094,20 @@ gcm_se_handler:
 
 .section	.pdata
 .align	4
-	.rva	.LSEH_begin_aesni_gcm_decrypt
-	.rva	.LSEH_end_aesni_gcm_decrypt
+	.rva	.LSEH_begin_GFp_aesni_gcm_decrypt
+	.rva	.LSEH_end_GFp_aesni_gcm_decrypt
 	.rva	.LSEH_gcm_dec_info
 
-	.rva	.LSEH_begin_aesni_gcm_encrypt
-	.rva	.LSEH_end_aesni_gcm_encrypt
-	.rva	.LSEH_gcm_enc_info
+	.rva	.LSEH_begin_GFp_aesni_gcm_encrypt
+	.rva	.LSEH_end_GFp_aesni_gcm_encrypt
+	.rva	.LSEH_GFp_gcm_enc_info
 .section	.xdata
 .align	8
 .LSEH_gcm_dec_info:
 	.byte	9,0,0,0
 	.rva	gcm_se_handler
 	.rva	.Lgcm_dec_body,.Lgcm_dec_abort
-.LSEH_gcm_enc_info:
+.LSEH_GFp_gcm_enc_info:
 	.byte	9,0,0,0
 	.rva	gcm_se_handler
 	.rva	.Lgcm_enc_body,.Lgcm_enc_abort
@@ -1117,19 +1117,19 @@ ___
 $code=<<___;	# assembler is too old
 .text
 
-.globl	aesni_gcm_encrypt
-.type	aesni_gcm_encrypt,\@abi-omnipotent
-aesni_gcm_encrypt:
+.globl	GFp_aesni_gcm_encrypt
+.type	GFp_aesni_gcm_encrypt,\@abi-omnipotent
+GFp_aesni_gcm_encrypt:
 	xor	%eax,%eax
 	ret
-.size	aesni_gcm_encrypt,.-aesni_gcm_encrypt
+.size	GFp_aesni_gcm_encrypt,.-GFp_aesni_gcm_encrypt
 
-.globl	aesni_gcm_decrypt
-.type	aesni_gcm_decrypt,\@abi-omnipotent
-aesni_gcm_decrypt:
+.globl	GFp_aesni_gcm_decrypt
+.type	GFp_aesni_gcm_decrypt,\@abi-omnipotent
+GFp_aesni_gcm_decrypt:
 	xor	%eax,%eax
 	ret
-.size	aesni_gcm_decrypt,.-aesni_gcm_decrypt
+.size	GFp_aesni_gcm_decrypt,.-GFp_aesni_gcm_decrypt
 ___
 }}}
 

@@ -54,25 +54,18 @@
  * copied and put under another distribution licence
  * [including the GNU Public Licence.] */
 
-#if !defined(__STDC_FORMAT_MACROS)
-#define __STDC_FORMAT_MACROS
-#endif
-
-#include <openssl/cpu.h>
+#include <GFp/cpu.h>
 
 
 #if !defined(OPENSSL_NO_ASM) && (defined(OPENSSL_X86) || defined(OPENSSL_X86_64))
 
 #include <inttypes.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #if defined(_MSC_VER)
-OPENSSL_MSVC_PRAGMA(warning(push, 3))
+#pragma warning(push, 3)
 #include <immintrin.h>
 #include <intrin.h>
-OPENSSL_MSVC_PRAGMA(warning(pop))
+#pragma warning(pop)
 #endif
 
 #include "internal.h"
@@ -113,6 +106,8 @@ static void OPENSSL_cpuid(uint32_t *out_eax, uint32_t *out_ebx,
 
 // OPENSSL_xgetbv returns the value of an Intel Extended Control Register (XCR).
 // Currently only XCR0 is defined by Intel so |xcr| should always be zero.
+//
+// See https://software.intel.com/en-us/articles/how-to-detect-new-instruction-support-in-the-4th-generation-intel-core-processor-family
 static uint64_t OPENSSL_xgetbv(uint32_t xcr) {
 #if defined(_MSC_VER)
   return (uint64_t)_xgetbv(xcr);
@@ -123,26 +118,7 @@ static uint64_t OPENSSL_xgetbv(uint32_t xcr) {
 #endif
 }
 
-// handle_cpu_env applies the value from |in| to the CPUID values in |out[0]|
-// and |out[1]|. See the comment in |OPENSSL_cpuid_setup| about this.
-static void handle_cpu_env(uint32_t *out, const char *in) {
-  const int invert = in[0] == '~';
-  uint64_t v;
-
-  if (!sscanf(in + invert, "%" PRIu64, &v)) {
-    return;
-  }
-
-  if (invert) {
-    out[0] &= ~v;
-    out[1] &= ~(v >> 32);
-  } else {
-    out[0] = v;
-    out[1] = v >> 32;
-  }
-}
-
-void OPENSSL_cpuid_setup(void) {
+void GFp_cpuid_setup(void) {
   // Determine the vendor and maximum input value.
   uint32_t eax, ebx, ecx, edx;
   OPENSSL_cpuid(&eax, &ebx, &ecx, &edx, 0);
@@ -156,19 +132,6 @@ void OPENSSL_cpuid_setup(void) {
                edx == 0x69746e65 /* enti */ &&
                ecx == 0x444d4163 /* cAMD */;
 
-  int has_amd_xop = 0;
-  if (is_amd) {
-    // AMD-specific logic.
-    // See http://developer.amd.com/wordpress/media/2012/10/254811.pdf
-    OPENSSL_cpuid(&eax, &ebx, &ecx, &edx, 0x80000000);
-    uint32_t num_extended_ids = eax;
-    if (num_extended_ids >= 0x80000001) {
-      OPENSSL_cpuid(&eax, &ebx, &ecx, &edx, 0x80000001);
-      if (ecx & (1u << 11)) {
-        has_amd_xop = 1;
-      }
-    }
-  }
 
   uint32_t extended_features[2] = {0};
   if (num_ids >= 7) {
@@ -221,11 +184,7 @@ void OPENSSL_cpuid_setup(void) {
   }
 
   // The SDBG bit is repurposed to denote AMD XOP support.
-  if (has_amd_xop) {
-    ecx |= (1u << 11);
-  } else {
-    ecx &= ~(1u << 11);
-  }
+  ecx &= ~(1u << 11);
 
   uint64_t xcr0 = 0;
   if (ecx & (1u << 27)) {
@@ -258,32 +217,10 @@ void OPENSSL_cpuid_setup(void) {
     extended_features[0] &= ~(1u << 19);
   }
 
-  OPENSSL_ia32cap_P[0] = edx;
-  OPENSSL_ia32cap_P[1] = ecx;
-  OPENSSL_ia32cap_P[2] = extended_features[0];
-  OPENSSL_ia32cap_P[3] = extended_features[1];
-
-  const char *env1, *env2;
-  env1 = getenv("OPENSSL_ia32cap");
-  if (env1 == NULL) {
-    return;
-  }
-
-  // OPENSSL_ia32cap can contain zero, one or two values, separated with a ':'.
-  // Each value is a 64-bit, unsigned value which may start with "0x" to
-  // indicate a hex value. Prior to the 64-bit value, a '~' may be given.
-  //
-  // If '~' isn't present, then the value is taken as the result of the CPUID.
-  // Otherwise the value is inverted and ANDed with the probed CPUID result.
-  //
-  // The first value determines OPENSSL_ia32cap_P[0] and [1]. The second [2]
-  // and [3].
-
-  handle_cpu_env(&OPENSSL_ia32cap_P[0], env1);
-  env2 = strchr(env1, ':');
-  if (env2 != NULL) {
-    handle_cpu_env(&OPENSSL_ia32cap_P[2], env2 + 1);
-  }
+  GFp_ia32cap_P[0] = edx;
+  GFp_ia32cap_P[1] = ecx;
+  GFp_ia32cap_P[2] = extended_features[0];
+  GFp_ia32cap_P[3] = extended_features[1];
 }
 
 #endif  // !OPENSSL_NO_ASM && (OPENSSL_X86 || OPENSSL_X86_64)
